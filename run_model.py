@@ -1,3 +1,5 @@
+from itertools import cycle
+import numpy as np
 import pandas as pd
 import torch
 from torch import nn
@@ -14,6 +16,12 @@ from lra_config import get_listops_config
 def dict_to_device(inputs, device):
     return {key: inputs[key].to(device) for key in inputs}
 
+def transformers_collator(sample_list):
+    input_list, target_list = zip(*sample_list)
+    keys = input_list[0].keys()
+    inputs = {k: torch.cat([inp[k] for inp in input_list], dim=0) for k in keys}
+    target = torch.cat(target_list, dim=0) 
+    return inputs, target
 # datasets
 class ListOpsDataset:
     def __init__(self, config):
@@ -39,11 +47,11 @@ model_config = AutoConfig.from_pretrained(model_name, **model_config)
 
 # hyperparams
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-epochs = 1
 lr = config.learning_rate
 wd = config.weight_decay
-batch_size = 1 #TODO: allow batching 
+batch_size = config.batch_size 
 warmup_steps = config.warmup
+max_train_steps = int(np.ceil(config.total_train_samples / config.batch_size)) # can keep it float
 
 # model
 model = AutoModelForSequenceClassification.from_config(model_config)
@@ -54,25 +62,26 @@ scheduler = MultiplicativeLR(optimizer, lambda step: step/warmup_steps if step <
 
 # load data
 dataset = ListOpsDataset(config)
-dataloader = dataset #DataLoader(dataset, batch_size = batch_size)
+dataloader = DataLoader(dataset, batch_size = batch_size, collate_fn = transformers_collator)
 
 # train model
 model.train()
-for _ in range(epochs):
-    running_loss = 0
-    running_acc = 0
-    pbar = tqdm(dataloader)
-    for i, (inputs, target) in enumerate(pbar):
-        optimizer.zero_grad()
-        inputs = dict_to_device(inputs, device)
-        target = target.to(device)
-        outputs = model(**inputs)
-        loss = F.cross_entropy(outputs.logits, target)
+running_loss = 0
+running_acc = 0
+pbar = tqdm(cycle(dataloader), total = max_train_steps)
+for i, (inputs, target) in enumerate(pbar):
+    if i >= max_train_steps:
+        break
+    optimizer.zero_grad()
+    inputs = dict_to_device(inputs, device)
+    target = target.to(device)
+    outputs = model(**inputs)
+    loss = F.cross_entropy(outputs.logits, target)
 
-        running_loss += loss.item()
-        running_acc += sum(torch.argmax(loss, dim=-1) == target).item()/batch_size
-        pbar.set_postfix_str(f"loss: {running_loss/(i+1):.2f} accuracy: {running_acc/(i+1):.2f}")
+    running_loss += loss.item()
+    running_acc += sum(torch.argmax(loss, dim=-1) == target).item()/batch_size
+    pbar.set_postfix_str(f"loss: {running_loss/(i+1):.2f} accuracy: {running_acc/(i+1):.2f}")
 
-        loss.backward()
-        optimizer.step()
-        scheduler.step()
+    loss.backward()
+    optimizer.step()
+    scheduler.step()

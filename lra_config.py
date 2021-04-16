@@ -16,9 +16,9 @@ ascii_tokenizer.vocab_size = 256 + 1 # i guess..
 def get_listops_config():
     """Get the default hyperparameter configuration."""
     config = ml_collections.ConfigDict()
-#     config.batch_size = 32
+    config.batch_size = 32
 #     config.eval_frequency = 20
-    config.num_train_steps = 5000
+    config.total_train_samples = 32 * 5000
 #     config.num_eval_steps = 20
     config.learning_rate = 0.05
     config.weight_decay = 1e-1
