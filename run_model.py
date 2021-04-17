@@ -22,6 +22,7 @@ def transformers_collator(sample_list):
     inputs = {k: torch.cat([inp[k] for inp in input_list], dim=0) for k in keys}
     target = torch.cat(target_list, dim=0) 
     return inputs, target
+
 # datasets
 class ListOpsDataset:
     def __init__(self, config):
