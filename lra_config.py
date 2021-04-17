@@ -22,7 +22,14 @@ def make_char_tokenizer(allowed_chars, lowercase_input=False):
 
 def pixel_tokenizer(x, max_length):
     # note: x is not batched
-    return x.view(-1)
+    x = x.flatten()
+    x = x[:max_length]
+    n = len(x)
+    ids = list(map(lambda a: a+1, x)) + ([0] * (max_length-n))
+    mask = ([1] * n) + ([0] * (max_length-n))
+    return {'input_ids': torch.LongTensor([ids]), 
+                'attention_mask': torch.LongTensor([mask])}
+
 pixel_tokenizer.vocab_size = 256 + 1
 ascii_tokenizer = make_char_tokenizer(''.join(chr(i) for i in range(256)))
 
@@ -80,23 +87,25 @@ def get_cifar10_config():
     
     config = ml_collections.ConfigDict()
     config.batch_size = 256
+    config.tokenizer = pixel_tokenizer
 #     config.eval_frequency = TRAIN_EXAMPLES // config.batch_size
 #     config.num_eval_steps = VALID_EXAMPLES // config.batch_size
     config.total_train_samples = TRAIN_EXAMPLES * NUM_EPOCHS
     config.weight_decay = 0.
     config.learning_rate = .0005
     config.warmup = (TRAIN_EXAMPLES // config.batch_size) * 1
+    config.max_length = 1024 # 32 x 32 pics (which we "grayscaled"..)
 #     config.steps_per_cycle = (TRAIN_EXAMPLES // config.batch_size) * NUM_EPOCHS
 
     # model params
     model_config = ml_collections.ConfigDict()
     model_config.max_position_embeddings = config.max_length
     model_config.hidden_size = 32
-    config.model.num_attention_heads = 1
-    config.model.num_hidden_layers = 1
-    config.model.intermediate_dim = 64
-    model_config.dropout_rate = 0.3
-    model_config.attention_dropout_rate = 0.2
+    model_config.num_attention_heads = 1
+    model_config.num_hidden_layers = 1
+    model_config.intermediate_dim = 64
+    model_config.hidden_dropout_prob = 0.3
+    model_config.attention_probs_dropout_prob = 0.2
     model_config.num_labels = 10
     model_config.vocab_size = config.tokenizer.vocab_size
     

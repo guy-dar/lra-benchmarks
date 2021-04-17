@@ -10,7 +10,10 @@ from tqdm import tqdm
 from torch.optim import Adam
 from torch.optim.lr_scheduler import MultiplicativeLR
 from torch.utils.data import DataLoader
-from lra_config import get_listops_config
+from ml_collections import ConfigDict
+from lra_config import (get_listops_config, get_cifar10_config)
+import pickle
+from functools import reduce
 
 # helper fns
 def dict_to_device(inputs, device):
@@ -40,9 +43,52 @@ class ListOpsDataset:
     
     def __len__(self):
         return len(self.data)
+
+class Cifar10Dataset:
+    def __init__(self, config):
+        data_paths = [f"datasets/cifar-10-batches-py/data_batch_{i}" for i in range(1, 6)]
+        print("loading cifar-10 data...")
+        data_dicts = [Cifar10Dataset.unpickle(path) for path in data_paths]
+        print("assembling cifar-10 files..")
+        self.data = reduce((lambda x, y: {b'data': np.concatenate([x[b'data'], y[b'data']], axis=0), 
+                                         b'labels': np.concatenate([x[b'labels'], y[b'labels']], axis=0)}), 
+                           data_dicts)
+        # TODO CHECK: i think this is the right shape 
+        # see: https://www.cs.toronto.edu/~kriz/cifar.html 
+        #      section "Dataset layouts" discusses the memory layout of the array
+        self.data[b'data'] = self.data[b'data'].reshape((-1, 3, 1024)) 
+       
+        self.tokenizer = config.tokenizer
+        self.max_length = config.max_length
     
+    @staticmethod
+    def unpickle(file):
+        with open(file, 'rb') as fo:
+            d = pickle.load(fo, encoding='bytes')
+        return d
+    
+    def __getitem__(self, i):
+        source = self.data[b'data'][i]
+#         source = np.round(source.mean(axis=0)).astype(int)
+        inputs = self.tokenizer(source, max_length=self.max_length)
+        target = self.data[b'labels'][i]
+        return inputs, torch.LongTensor([target])
+    
+    def __len__(self):
+        return len(self.data)
+
+# tasks
+TASKS = {
+         'listops': ConfigDict(dict(dataset_fn=ListOpsDataset, config_getter=get_listops_config)),
+         'cifar10': ConfigDict(dict(dataset_fn=Cifar10Dataset, config_getter=get_cifar10_config)),
+        }
+    
+# fetch task 
+task_name = "listops"
+task = TASKS[task_name]
+
 # config
-config, model_config = get_listops_config()
+config, model_config = task.config_getter()
 model_config = BertConfig(**model_config)
 
 # hyperparams
@@ -61,8 +107,8 @@ optimizer = Adam(model.parameters(), lr=lr, weight_decay = wd)
 scheduler = MultiplicativeLR(optimizer, lambda step: step/warmup_steps if step < warmup_steps else step**(-.5))
 
 # load data
-dataset = ListOpsDataset(config)
-dataloader = DataLoader(dataset, batch_size = batch_size, collate_fn = transformers_collator)
+dataset = task.dataset_fn(config)
+dataloader = DataLoader(dataset, batch_size = batch_size, collate_fn=transformers_collator)
 
 # train model
 model.train()
@@ -70,7 +116,7 @@ running_loss = 0
 running_acc = 0
 pbar = tqdm(cycle(dataloader), total = max_train_steps)
 for i, (inputs, target) in enumerate(pbar):
-    if i >= max_train_steps:
+    if i == max_train_steps:
         break
     optimizer.zero_grad()
     inputs = dict_to_device(inputs, device)
