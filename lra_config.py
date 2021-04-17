@@ -44,6 +44,7 @@ def get_listops_config():
     config.learning_rate = 0.05
     config.weight_decay = 1e-1
     config.warmup = 1000
+    config.tied_weights = True
     config.max_length = 2000
     config.tokenizer = make_char_tokenizer(set('0123456789 MIN MAX MEDIAN SUM_MOD [ ] ( )'))
 
@@ -67,6 +68,7 @@ def get_text_classification_config(num_labels=2):
     config.weight_decay = 1e-1
     config.warmup = 8000
     config.tokenizer = ascii_tokenizer
+    config.tied_weights = False
     config.max_length = 1000
 
     model_config = ml_collections.ConfigDict()
@@ -94,6 +96,7 @@ def get_cifar10_config():
     config.weight_decay = 0.
     config.learning_rate = .0005
     config.warmup = (TRAIN_EXAMPLES // config.batch_size) * 1
+    config.tied_weights = False
     config.max_length = 1024 # 32 x 32 pics (which we "grayscaled"..)
 #     config.steps_per_cycle = (TRAIN_EXAMPLES // config.batch_size) * NUM_EPOCHS
 
