@@ -53,6 +53,7 @@ def train(model, config):
     wd = config.weight_decay
     batch_size = config.batch_size 
     warmup_steps = config.warmup
+    avg_factor = 0.99
     
     dataset = task.dataset_fn(config, split='train')
     dataloader = DataLoader(dataset, batch_size=batch_size, collate_fn=transformers_collator)
@@ -70,8 +71,8 @@ def train(model, config):
     # train model
     model.to(device)
     model.train()
-    running_loss = 0
-    running_acc = 0
+    avg_loss = 0
+    avg_acc = 0
     pbar = tqdm(cycle(dataloader), total=max_train_steps)
     for i, (inputs, target) in enumerate(pbar):
         if i == max_train_steps:
@@ -85,9 +86,11 @@ def train(model, config):
         optimizer.step()
         scheduler.step()
 
-        running_loss += loss.item()
-        running_acc += sum(torch.argmax(outputs.logits, dim=-1) == target).item()/batch_size
-        pbar.set_postfix_str(f"loss: {running_loss/(i+1):.2f} accuracy: {running_acc/(i+1):.2f}")
+        cur_loss = loss.item()
+        cur_acc = sum(torch.argmax(outputs.logits, dim=-1) == target).item()/batch_size
+        avg_loss = cur_loss if avg_loss is None else (1-avg_factor) * avg_loss + avg_factor * cur_loss  
+        avg_acc =  cur_acc if avg_acc is None else (1-avg_factor) * avg_acc + avg_factor * cur_acc
+        pbar.set_postfix_str(f"loss: {avg_loss:.2f} accuracy: {avg_acc:.2f}")
         
         # evaluate
         if (config.eval_frequency > 0) and  ((i+1) % config.eval_frequency == 0):
@@ -105,8 +108,8 @@ def train(model, config):
                 outputs = model(**inputs)
                 loss = F.cross_entropy(outputs.logits, target)
                 eval_running_loss += loss.item()
-                eval_running_acc += sum(torch.argmax(outputs.logits, dim=-1) == target).item()/config.eval_batch_size
-                pbar.set_postfix_str(f"loss: {eval_running_loss/(j+1):.2f} accuracy: {eval_running_acc/(j+1):.2f}")
+                eval_running_acc += sum(torch.argmax(outputs.logits, dim=-1) == target).item()/batch_size
+                pbar.set_postfix_str(f"eval loss: {eval_running_loss/(j+1):.2f} eval accuracy: {eval_running_acc/(j+1):.2f}")
             model.train()
         
 # main
