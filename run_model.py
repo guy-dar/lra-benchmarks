@@ -5,7 +5,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 import transformers
-from transformers import (AutoTokenizer, AutoModelForSequenceClassification, AutoConfig)
+from transformers import (AutoTokenizer, BertForSequenceClassification, BertConfig)
 from tqdm import tqdm
 from torch.optim import Adam
 from torch.optim.lr_scheduler import MultiplicativeLR
@@ -43,8 +43,7 @@ class ListOpsDataset:
     
 # config
 config, model_config = get_listops_config()
-model_name = "bert-base-uncased" # only thing that matters here is the architecture. everything else will be overriden 
-model_config = AutoConfig.from_pretrained(model_name, **model_config)
+model_config = BertConfig(**model_config)
 
 # hyperparams
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -55,7 +54,7 @@ warmup_steps = config.warmup
 max_train_steps = int(np.ceil(config.total_train_samples / config.batch_size)) # can keep it float
 
 # model
-model = AutoModelForSequenceClassification.from_config(model_config)
+model = BertForSequenceClassification(model_config)
 model.to(device)
 tokenizer = config.tokenizer
 optimizer = Adam(model.parameters(), lr=lr, weight_decay = wd)
