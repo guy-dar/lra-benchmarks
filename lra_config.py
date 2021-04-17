@@ -38,8 +38,8 @@ ascii_tokenizer = make_char_tokenizer(''.join(chr(i) for i in range(256)))
 def get_listops_config():
     config = ml_collections.ConfigDict()
     config.batch_size = 4
-#     config.eval_frequency = 20
-#     config.num_eval_steps = 20
+    config.eval_frequency = 20
+    config.total_eval_samples = 640
     config.total_train_samples = 160000
     config.learning_rate = 0.05
     config.weight_decay = 1e-1
@@ -62,8 +62,9 @@ def get_listops_config():
 def get_text_classification_config(num_labels=2):
     config = ml_collections.ConfigDict()
     config.batch_size = 4
-#     config.eval_frequency = 100
+    config.eval_frequency = 100
     config.total_train_samples = 640000
+    config.total_eval_samples = -1
     config.learning_rate = 0.05
     config.weight_decay = 1e-1
     config.warmup = 8000
@@ -85,13 +86,13 @@ def get_text_classification_config(num_labels=2):
 def get_cifar10_config():
     NUM_EPOCHS = 200
     TRAIN_EXAMPLES = 45000
-#     VALID_EXAMPLES = 10000
+    VALID_EXAMPLES = 10000
     
     config = ml_collections.ConfigDict()
     config.batch_size = 256
     config.tokenizer = pixel_tokenizer
-#     config.eval_frequency = TRAIN_EXAMPLES // config.batch_size
-#     config.num_eval_steps = VALID_EXAMPLES // config.batch_size
+    config.eval_frequency = TRAIN_EXAMPLES // config.batch_size
+    config.total_eval_samples = VALID_EXAMPLES
     config.total_train_samples = TRAIN_EXAMPLES * NUM_EPOCHS
     config.weight_decay = 0.
     config.learning_rate = .0005

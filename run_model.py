@@ -32,14 +32,12 @@ def transformers_collator(sample_list):
     return inputs, target
 
 # tasks
-
 TASKS = {
          'listops': ConfigDict(dict(dataset_fn=ListOpsDataset, config_getter=get_listops_config)),
          'cifar10': ConfigDict(dict(dataset_fn=Cifar10Dataset, config_getter=get_cifar10_config)),
         }
 
 # main functions
-
 def get_model(config, model_config):
     model_config = BertConfig(**model_config)
     model = BertForSequenceClassification(model_config)
@@ -49,19 +47,24 @@ def get_model(config, model_config):
         force_weight_sharing(layer_base)
     return model
 
-def train(model, task, config):
+def train(model, config):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     lr = config.learning_rate
     wd = config.weight_decay
     batch_size = config.batch_size 
     warmup_steps = config.warmup
-    max_train_steps = int(np.ceil(config.total_train_samples / config.batch_size)) # can keep it float
     
-    dataset = task.dataset_fn(config)
-    dataloader = DataLoader(dataset, batch_size = batch_size, collate_fn=transformers_collator)
-
+    dataset = task.dataset_fn(config, split='train')
+    dataloader = DataLoader(dataset, batch_size=batch_size, collate_fn=transformers_collator)
+    eval_dataset = task.dataset_fn(config, split='eval')    
+    max_train_steps = int(np.ceil(config.total_train_samples / batch_size))
+    if config.total_eval_samples < 0:
+        max_eval_steps = len(eval_dataset) // batch_size
+    else:
+        max_eval_steps = int(np.ceil(config.total_eval_samples / batch_size))
+    
     tokenizer = config.tokenizer
-    optimizer = Adam(model.parameters(), lr=lr, weight_decay = wd)
+    optimizer = Adam(model.parameters(), lr=lr, weight_decay=wd)
     scheduler = MultiplicativeLR(optimizer, lambda step: step/warmup_steps if step < warmup_steps else step**(-.5))
     
     # train model
@@ -69,7 +72,7 @@ def train(model, task, config):
     model.train()
     running_loss = 0
     running_acc = 0
-    pbar = tqdm(cycle(dataloader), total = max_train_steps)
+    pbar = tqdm(cycle(dataloader), total=max_train_steps)
     for i, (inputs, target) in enumerate(pbar):
         if i == max_train_steps:
             break
@@ -83,14 +86,33 @@ def train(model, task, config):
         scheduler.step()
 
         running_loss += loss.item()
-        running_acc += sum(torch.argmax(loss, dim=-1) == target).item()/batch_size
+        running_acc += sum(torch.argmax(outputs.logits, dim=-1) == target).item()/batch_size
         pbar.set_postfix_str(f"loss: {running_loss/(i+1):.2f} accuracy: {running_acc/(i+1):.2f}")
-
+        
+        # evaluate
+        if (config.eval_frequency > 0) and  ((i+1) % config.eval_frequency == 0):
+            model.eval()
+            eval_running_loss = 0.
+            eval_running_acc = 0.
+            eval_dataloader = DataLoader(eval_dataset, batch_size=batch_size, 
+                                         collate_fn=transformers_collator)
+            eval_pbar = tqdm(eval_dataloader, total=max_eval_steps)
+            for j, (inputs, target) in enumerate(eval_pbar):
+                if j == max_eval_steps:
+                    break
+                inputs = dict_to_device(inputs, device)
+                target = target.to(device)
+                outputs = model(**inputs)
+                loss = F.cross_entropy(outputs.logits, target)
+                eval_running_loss += loss.item()
+                eval_running_acc += sum(torch.argmax(outputs.logits, dim=-1) == target).item()/config.eval_batch_size
+                pbar.set_postfix_str(f"loss: {eval_running_loss/(j+1):.2f} accuracy: {eval_running_acc/(j+1):.2f}")
+            model.train()
+        
 # main
-
 if __name__ == "__main__":
     task_name = "cifar10"
     task = TASKS[task_name]
     config, model_config = task.config_getter()    
     model = get_model(config, model_config)
-    train(model, task, config)
+    train(model, config)

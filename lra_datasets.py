@@ -5,9 +5,11 @@ from functools import reduce
 import torch
 
 class ListOpsDataset:
-    def __init__(self, config):
-        data_path = "datasets/lra_release/listops-1000/basic_train.tsv"
-        self.data = pd.read_csv(data_path, delimiter='\t')
+    def __init__(self, config, split='train'):
+        
+        data_paths = {'train': "datasets/lra_release/listops-1000/basic_train.tsv",
+                      'eval': "datasets/lra_release/listops-1000/basic_val.tsv"}
+        self.data = pd.read_csv(data_paths[split], delimiter='\t')
         self.tokenizer = config.tokenizer
         self.max_length = config.max_length
         
@@ -22,10 +24,12 @@ class ListOpsDataset:
         return len(self.data)
 
 class Cifar10Dataset:
-    def __init__(self, config):
-        data_paths = [f"datasets/cifar-10-batches-py/data_batch_{i}" for i in range(1, 6)]
+    def __init__(self, config, split='train'):
+        data_paths = {'train': [f"datasets/cifar-10-batches-py/data_batch_{i}" for i in range(1, 6)],
+                      'eval': ["datasets/cifar-10-batches-py/test_batch"]
+                     }
         print("loading cifar-10 data...")
-        data_dicts = [Cifar10Dataset.unpickle(path) for path in data_paths]
+        data_dicts = [Cifar10Dataset.unpickle(path) for path in data_paths[split]]
         print("assembling cifar-10 files..")
         self.data = reduce((lambda x, y: {b'data': np.concatenate([x[b'data'], y[b'data']], axis=0), 
                                          b'labels': np.concatenate([x[b'labels'], y[b'labels']], axis=0)}), 
