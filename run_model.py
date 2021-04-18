@@ -116,7 +116,7 @@ def train(model, config):
 # main
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("task", default="cifar10", choices=["cifar10", "listops"],
+    parser.add_argument("--task", default="cifar10", choices=["cifar10", "listops"],
                        help="choose an LRA dataset from available options")
     args = parser.parse_args()
     task_name = args.task
