@@ -1,8 +1,8 @@
 import torch
 import ml_collections
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 # helper fns
-
 def make_char_tokenizer(allowed_chars, lowercase_input=False):
     # make distinct
     allowed_chars = list(set(allowed_chars))
@@ -34,7 +34,6 @@ pixel_tokenizer.vocab_size = 256 + 1
 ascii_tokenizer = make_char_tokenizer(''.join(chr(i) for i in range(256)))
 
 # configs
-
 def get_listops_config():
     config = ml_collections.ConfigDict()
     config.batch_size = 4
@@ -99,8 +98,10 @@ def get_cifar10_config():
     config.warmup = (TRAIN_EXAMPLES // config.batch_size) * 1
     config.tied_weights = False
     config.max_length = 1024 # 32 x 32 pics (which we "grayscaled"..)
-#     config.steps_per_cycle = (TRAIN_EXAMPLES // config.batch_size) * NUM_EPOCHS
-
+    
+    steps_per_cycle = (TRAIN_EXAMPLES // config.batch_size) * NUM_EPOCHS
+    config.lr_scheduler = lambda optimizer: CosineAnnealingLR(optimizer, steps_per_cycle)
+    
     # model params
     model_config = ml_collections.ConfigDict()
     model_config.max_position_embeddings = config.max_length

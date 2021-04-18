@@ -67,7 +67,9 @@ def train(model, config):
     
     tokenizer = config.tokenizer
     optimizer = Adam(model.parameters(), lr=lr, weight_decay=wd)
-    scheduler = LambdaLR(optimizer, lambda step: step/warmup_steps if step < warmup_steps else step**(-.5))
+    default_scheduler =  lambda optimizer: LambdaLR(optimizer, lambda step: step/warmup_steps if step < warmup_steps else step**(-.5))
+    scheduler_fn = config.get('lr_scheduler', default_scheduler)
+    scheduler = scheduler_fn(optimizer)
     
     # train model
     model.to(device)
@@ -89,8 +91,8 @@ def train(model, config):
 
         cur_loss = loss.item()
         cur_acc = sum(torch.argmax(outputs.logits, dim=-1) == target).item()/batch_size
-        avg_loss = cur_loss if avg_loss is None else (1-avg_factor) * avg_loss + avg_factor * cur_loss  
-        avg_acc =  cur_acc if avg_acc is None else (1-avg_factor) * avg_acc + avg_factor * cur_acc
+        avg_loss = cur_loss if avg_loss is None else avg_factor * avg_loss + (1-avg_factor) * cur_loss  
+        avg_acc =  cur_acc if avg_acc is None else avg_factor * avg_acc + (1-avg_factor) * cur_acc
         pbar.set_postfix_str(f"loss: {avg_loss:.2f} accuracy: {avg_acc:.2f}")
         
         # evaluate
