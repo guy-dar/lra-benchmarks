@@ -11,8 +11,8 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 from ml_collections import ConfigDict
-from lra_config import (get_listops_config, get_cifar10_config)
-from lra_datasets import (ListOpsDataset, Cifar10Dataset)
+from lra_config import (get_listops_config, get_cifar10_config, get_text_classification_config)
+from lra_datasets import (ListOpsDataset, Cifar10Dataset, ImdbDataset)
 from argparse import ArgumentParser
 
 # helper fns
@@ -36,6 +36,7 @@ def transformers_collator(sample_list):
 TASKS = {
          'listops': ConfigDict(dict(dataset_fn=ListOpsDataset, config_getter=get_listops_config)),
          'cifar10': ConfigDict(dict(dataset_fn=Cifar10Dataset, config_getter=get_cifar10_config)),
+         'imdb': ConfigDict(dict(dataset_fn=ImdbDataset, config_getter=get_text_classification_config)),
         }
 
 # main functions
@@ -118,7 +119,7 @@ def train(model, config):
 # main
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("--task", default="cifar10", choices=["cifar10", "listops"],
+    parser.add_argument("--task", default="cifar10", choices=TASKS.keys(),
                        help="choose an LRA dataset from available options")
     args = parser.parse_args()
     task_name = args.task

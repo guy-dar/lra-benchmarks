@@ -3,6 +3,33 @@ import pandas as pd
 import pickle
 from functools import reduce
 import torch
+from glob import glob
+from itertools import cycle
+
+class ImdbDataset:
+    def __init__(self, config, split='train'):       
+        data_paths = {'train': "datasets/aclImdb/train",
+                      'eval': "datasets/aclImdb/test"}
+        split_path = data_paths[split]
+        neg_path = split_path + "/neg"
+        pos_path = split_path + "/pos"
+        neg_inputs = zip(glob(neg_path+"/*.txt"), cycle([0]))
+        pos_inputs = zip(glob(pos_path+"/*.txt"), cycle([1]))
+        self.data = np.random.permutation(list(neg_inputs) + list(pos_inputs))
+        
+        self.tokenizer = config.tokenizer
+        self.max_length = config.max_length
+        
+    def __getitem__(self, i):
+        data = self.data[i]
+        with open(data[0], 'r') as fo:
+            source = fo.read()
+        inputs = self.tokenizer(source, max_length=self.max_length)
+        target = int(data[1])
+        return inputs, torch.LongTensor([target])
+    
+    def __len__(self):
+        return len(self.data)
 
 class ListOpsDataset:
     def __init__(self, config, split='train'):
