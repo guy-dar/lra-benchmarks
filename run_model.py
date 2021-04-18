@@ -8,11 +8,12 @@ import transformers
 from transformers import (AutoTokenizer, BertForSequenceClassification, BertConfig)
 from tqdm import tqdm
 from torch.optim import Adam
-from torch.optim.lr_scheduler import MultiplicativeLR
+from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 from ml_collections import ConfigDict
 from lra_config import (get_listops_config, get_cifar10_config)
 from lra_datasets import (ListOpsDataset, Cifar10Dataset)
+from argparse import ArgumentParser
 
 # helper fns
 
@@ -66,7 +67,7 @@ def train(model, config):
     
     tokenizer = config.tokenizer
     optimizer = Adam(model.parameters(), lr=lr, weight_decay=wd)
-    scheduler = MultiplicativeLR(optimizer, lambda step: step/warmup_steps if step < warmup_steps else step**(-.5))
+    scheduler = LambdaLR(optimizer, lambda step: step/warmup_steps if step < warmup_steps else step**(-.5))
     
     # train model
     model.to(device)
@@ -109,12 +110,17 @@ def train(model, config):
                 loss = F.cross_entropy(outputs.logits, target)
                 eval_running_loss += loss.item()
                 eval_running_acc += sum(torch.argmax(outputs.logits, dim=-1) == target).item()/batch_size
-                pbar.set_postfix_str(f"eval loss: {eval_running_loss/(j+1):.2f} eval accuracy: {eval_running_acc/(j+1):.2f}")
+                eval_pbar.set_postfix_str(f"eval loss: {eval_running_loss/(j+1):.2f} eval accuracy: {eval_running_acc/(j+1):.2f}")
             model.train()
         
 # main
 if __name__ == "__main__":
-    task_name = "cifar10"
+    parser = ArgumentParser()
+    parser.add_argument("task", default="cifar10", choices=["cifar10", "listops"],
+                       help="choose an LRA dataset from available options")
+    args = parser.parse_args()
+    task_name = args.task
+    
     task = TASKS[task_name]
     config, model_config = task.config_getter()    
     model = get_model(config, model_config)
