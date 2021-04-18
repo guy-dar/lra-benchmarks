@@ -74,8 +74,8 @@ def train(model, config):
     # train model
     model.to(device)
     model.train()
-    avg_loss = 0
-    avg_acc = 0
+    avg_loss = None
+    avg_acc = None
     pbar = tqdm(cycle(dataloader), total=max_train_steps)
     for i, (inputs, target) in enumerate(pbar):
         if i == max_train_steps:
