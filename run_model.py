@@ -49,13 +49,13 @@ def get_model(config, model_config):
         force_weight_sharing(layer_base)
     return model
 
-def train(model, config):
+def train(model, config, use_deepspeed):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     lr = config.learning_rate
     wd = config.weight_decay
     batch_size = config.batch_size 
     warmup_steps = config.warmup
-    avg_factor = 0.99
+    avg_factor = 0.95
     
     dataset = task.dataset_fn(config, split='train')
     dataloader = DataLoader(dataset, batch_size=batch_size, collate_fn=transformers_collator)
@@ -66,12 +66,17 @@ def train(model, config):
     else:
         max_eval_steps = int(np.ceil(config.total_eval_samples / batch_size))
     
-    tokenizer = config.tokenizer
     optimizer = Adam(model.parameters(), lr=lr, weight_decay=wd)
-    default_scheduler =  lambda optimizer: LambdaLR(optimizer, lambda step: step/warmup_steps if step < warmup_steps else step**(-.5))
+    
+    def default_scheduler(optimizer): 
+        return LambdaLR(optimizer, lambda step: step/warmup_steps if step < warmup_steps else step**(-.5))
     scheduler_fn = config.get('lr_scheduler', default_scheduler)
     scheduler = scheduler_fn(optimizer)
     
+    if use_deepspeed:
+        model_engine, optimizer, _, _ = deepspeed.initialize(model=model, model_parameters=model.parameters(),
+                                                             optimizer=optimizer, lr_scheduler=scheduler,
+                                                             config_params=deepspeed_config)
     # train model
     model.to(device)
     model.train()
@@ -81,14 +86,20 @@ def train(model, config):
     for i, (inputs, target) in enumerate(pbar):
         if i == max_train_steps:
             break
-        optimizer.zero_grad()
-        inputs = dict_to_device(inputs, device)
-        target = target.to(device)
-        outputs = model(**inputs)
-        loss = F.cross_entropy(outputs.logits, target)
-        loss.backward()
-        optimizer.step()
-        scheduler.step()
+        if use_deepspeed:
+            outputs = model_engine(**inputs)
+            loss = F.cross_entropy(outputs.logits, target)
+            model_engine.backward(loss)
+            model_engine.step()
+        else:
+            optimizer.zero_grad()
+            inputs = dict_to_device(inputs, device)
+            target = target.to(device)
+            outputs = model(**inputs)
+            loss = F.cross_entropy(outputs.logits, target)
+            loss.backward()
+            optimizer.step()
+            scheduler.step()
 
         cur_loss = loss.item()
         cur_acc = sum(torch.argmax(outputs.logits, dim=-1) == target).item()/batch_size
@@ -97,7 +108,7 @@ def train(model, config):
         pbar.set_postfix_str(f"loss: {avg_loss:.2f} accuracy: {avg_acc:.2f}")
         
         # evaluate
-        if (config.eval_frequency > 0) and  ((i+1) % config.eval_frequency == 0):
+        if (config.eval_frequency > 0) and ((i+1) % config.eval_frequency == 0):
             model.eval()
             eval_running_loss = 0.
             eval_running_acc = 0.
@@ -118,13 +129,27 @@ def train(model, config):
         
 # main
 if __name__ == "__main__":
+    deepspeed_config = {
+        "zero_optimization": {
+            "stage": 3,
+            "overlap_comm": True
+        },
+        "fp16": {
+            "enabled": True
+        }
+    }
+    
     parser = ArgumentParser()
     parser.add_argument("--task", default="cifar10", choices=TASKS.keys(),
                        help="choose an LRA dataset from available options")
+    parser.add_argument("--deepspeed", action="store_true",
+                       help="use deepspeed optimization for better performance")
     args = parser.parse_args()
     task_name = args.task
+    if args.deepspeed:
+        import deepspeed
     
     task = TASKS[task_name]
     config, model_config = task.config_getter()    
     model = get_model(config, model_config)
-    train(model, config)
+    train(model, config, use_deepspeed=args.deepspeed)
