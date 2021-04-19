@@ -76,8 +76,8 @@ class Cifar10Dataset:
         return d
     
     def __getitem__(self, i):
-        source = self.data[b'data'][i]
-#         source = np.round(source.mean(axis=0)).astype(int)
+        r, g, b = self.data[b'data'][i]
+        source = (0.2989 * r + 0.5870 * g + 0.1140 * b).astype(int) # grayscale
         inputs = self.tokenizer(source, max_length=self.max_length)
         target = self.data[b'labels'][i]
         return inputs, torch.LongTensor([target])

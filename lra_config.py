@@ -37,13 +37,14 @@ ascii_tokenizer = make_char_tokenizer(''.join(chr(i) for i in range(256)))
 def get_listops_config():
     config = ml_collections.ConfigDict()
     config.batch_size = 4
-    config.eval_frequency = 20
+    config.gradient_accumulation_steps = 8
+    config.eval_frequency = 200
     config.total_eval_samples = 640
     config.total_train_samples = 160000
     config.learning_rate = 0.05
     config.weight_decay = 1e-1
     config.warmup = 1000
-    config.tied_weights = True
+    config.tied_weights = False
     config.max_length = 2000
     config.tokenizer = make_char_tokenizer(set('0123456789 MIN MAX MEDIAN SUM_MOD [ ] ( )'))
 
