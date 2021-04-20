@@ -32,8 +32,11 @@ def transformers_collator(sample_list):
     keys = input_list[0].keys()
     inputs = {k: torch.cat([inp[k] for inp in input_list], dim=0) for k in keys}
     target = torch.cat(target_list, dim=0) 
-    inputs.update({'labels': target})
-    return inputs
+#     inputs.update({'labels': target})
+    return inputs, target
+
+def accuracy_score(outp, target):
+    return sum(torch.argmax(outp, dim=-1) == target).item() / len(target)
 
 # consts
 OUTPUT_DIR = "output_dir/"
@@ -55,20 +58,17 @@ def get_model(config, model_config):
         force_weight_sharing(layer_base)
     return model
 
-def compute_metrics(eval_res):
-    preds, labels = eval_res.preds, eval_res.labels
-    return {"accuracy": (np.argmax(pred, axis=-1) == labels).mean()}
-    
 def train(model, config, use_deepspeed):
-    num_devices = 1
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     lr = config.learning_rate
     wd = config.weight_decay
     batch_size = config.batch_size 
-    device_batch_size = int(np.ceil(batch_size/num_devices))
     warmup_steps = config.warmup
-    gradient_accumulation_steps = config.get('gradient_accumulation_steps', 1)
+    gradient_accumulation_steps  = config.get('gradient_accumulation_steps', 1)
+    avg_factor = 0.95
     
     dataset = task.dataset_fn(config, split='train')
+    dataloader = DataLoader(dataset, batch_size=batch_size, collate_fn=transformers_collator)
     eval_dataset = task.dataset_fn(config, split='eval')    
     max_train_steps = int(np.ceil(config.total_train_samples / batch_size))
     if config.total_eval_samples < 0:
@@ -77,23 +77,72 @@ def train(model, config, use_deepspeed):
         max_eval_steps = int(np.ceil(config.total_eval_samples / batch_size))
     
     optimizer = Adam(model.parameters(), lr=lr, weight_decay=wd)
-    default_scheduler = LambdaLR(optimizer, lambda step: min(1, step/warmup_steps))
-    scheduler = config.get('lr_scheduler', default_scheduler)
     
-    # trainer
-    trainer_args = TrainingArguments(output_dir=OUTPUT_DIR, overwrite_output_dir=True, do_train=True, do_eval=True, 
-                                     per_device_train_batch_size=device_batch_size, per_device_eval_batch_size=device_batch_size,
-                                     max_steps=max_train_steps, eval_steps=max_eval_steps, logging_steps=config.eval_frequency, 
-                                     gradient_accumulation_steps=gradient_accumulation_steps,
-                                     deepspeed=deepspeed_json if use_deepspeed else None)
+    def default_scheduler(optimizer): 
+        return LambdaLR(optimizer, lambda step: step/warmup_steps if step < warmup_steps else (step / warmup_steps)**(-.5))
+    scheduler_fn = config.get('lr_scheduler', default_scheduler)
+    scheduler = scheduler_fn(optimizer)
     
-    trainer = Trainer(model=model, args=trainer_args, data_collator=transformers_collator,
-                      train_dataset=dataset, eval_dataset=eval_dataset, optimizers=(optimizer,scheduler), 
-                      compute_metrics=compute_metrics)
-    
+    if use_deepspeed:
+        model_engine, optimizer, _, _ = deepspeed.initialize(model=model, model_parameters=model.parameters(),
+                                                             optimizer=optimizer, lr_scheduler=scheduler,
+                                                             config_params=deepspeed_config)
     # train model
-    trainer.train()
+    model.to(device)
+    model.train()
+    avg_loss = None
+    avg_acc = None
+    pbar = tqdm(cycle(dataloader), total=max_train_steps)
+    for i, (inputs, target) in enumerate(pbar):
+        if i == max_train_steps:
+            break
+        if use_deepspeed:
+            outputs = model_engine(**inputs)
+            loss = F.cross_entropy(outputs.logits, target)
+            model_engine.backward(loss)
+            model_engine.step()
+        else:
+            if i % gradient_accumulation_steps == 0:
+                optimizer.zero_grad()
+                
+            inputs = dict_to_device(inputs, device)
+            target = target.to(device)
+            outputs = model(**inputs)
+            loss = F.cross_entropy(outputs.logits, target)
+            loss.backward()
+            if (i+1) % gradient_accumulation_steps == 0:
+                optimizer.step()
+                scheduler.step()
+
+        cur_loss = loss.item()
+        cur_acc = accuracy_score(outputs.logits, target)
+        avg_loss = cur_loss if avg_loss is None else avg_factor * avg_loss + (1-avg_factor) * cur_loss  
+        avg_acc =  cur_acc if avg_acc is None else avg_factor * avg_acc + (1-avg_factor) * cur_acc
+        pbar.set_postfix_str(f"loss: {avg_loss:.2f} accuracy: {avg_acc:.2f}")
+        
+        # evaluate
+        if (config.eval_frequency > 0) and ((i+1) % config.eval_frequency == 0):
+            model.eval()
+            eval_running_loss = 0.
+            eval_running_acc = 0.
+            eval_dataloader = DataLoader(eval_dataset, batch_size=batch_size, 
+                                         collate_fn=transformers_collator)
+            eval_pbar = tqdm(eval_dataloader, total=max_eval_steps)
+            for j, (inputs, target) in enumerate(eval_pbar):
+                if j == max_eval_steps:
+                    break
+                inputs = dict_to_device(inputs, device)
+                target = target.to(device)
+                outputs = model(**inputs)
+                loss = F.cross_entropy(outputs.logits, target)
+                eval_running_loss += loss.item()
+                eval_running_acc += accuracy_score(outputs.logits, target)
+                eval_pbar.set_postfix_str(f"eval loss: {eval_running_loss/(j+1):.2f} eval accuracy: {eval_running_acc/(j+1):.2f}")
+            model.train()
+        
     
+    
+
 # main
 if __name__ == "__main__":
     
