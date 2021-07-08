@@ -1,4 +1,4 @@
-# lra-benchmark
+# lra-benchmarks
 
 This repository is based on the Long Range Arena (LRA) datasets from Google Research. The original repository from Google is available [here](https://github.com/google-research/long-range-arena). The paper is available on [ArXiv](https://arxiv.org/pdf/2011.04006.pdf).
 
