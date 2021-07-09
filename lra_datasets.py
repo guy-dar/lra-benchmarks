@@ -9,8 +9,7 @@ from itertools import cycle
 
 class ImdbDataset:
     def __init__(self, config, split='train'):       
-        data_paths = {'train': "datasets/aclImdb/train",
-                      'eval': "datasets/aclImdb/test"}
+        data_paths = {'train': "datasets/aclImdb/train", 'eval': "datasets/aclImdb/test"}
         split_path = data_paths[split]
         neg_path = split_path + "/neg"
         pos_path = split_path + "/pos"
@@ -80,7 +79,8 @@ class Cifar10Dataset:
     
     def __getitem__(self, i):
         r, g, b = self.data[b'data'][i]
-        source = (0.2989 * r + 0.5870 * g + 0.1140 * b).astype(int) # grayscale
+        # grayscale image (assume pixels in [0, 255])
+        source = (0.2989 * r + 0.5870 * g + 0.1140 * b).astype(int)
         inputs = self.tokenizer(source, max_length=self.max_length)
         target = self.data[b'labels'][i]
         return inputs, torch.LongTensor([target])

@@ -9,14 +9,15 @@ def make_char_tokenizer(allowed_chars, lowercase_input=False):
     allowed_chars = list(set(allowed_chars))
     
     def _tokenizer(x, max_length):
-        x = x[:max_length] # truncate
+        # note: x is not batched
+        assert len(x.shape) == 1
+        x = x[:max_length]
         if lowercase_input:
             x = x.lower()
         n = len(x)
         mask = ([1] * n) + ([0] * (max_length-n))
         ids = list(map(lambda c: allowed_chars.index(c)+1, x)) + ([0] * (max_length-n))
-        return {'input_ids': torch.LongTensor([ids]), 
-                'attention_mask': torch.LongTensor([mask])}
+        return {'input_ids': torch.LongTensor([ids]), 'attention_mask': torch.LongTensor([mask])}
     
     _tokenizer.vocab_size = len(allowed_chars)+1
     return _tokenizer
@@ -24,13 +25,13 @@ def make_char_tokenizer(allowed_chars, lowercase_input=False):
 
 def pixel_tokenizer(x, max_length):
     # note: x is not batched
+    assert len(x.shape) == 1
     x = x.flatten()
     x = x[:max_length]
     n = len(x)
     ids = list(map(lambda a: a+1, x)) + ([0] * (max_length-n))
     mask = ([1] * n) + ([0] * (max_length-n))
-    return {'input_ids': torch.LongTensor([ids]), 
-                'attention_mask': torch.LongTensor([mask])}
+    return {'input_ids': torch.LongTensor([ids]), 'attention_mask': torch.LongTensor([mask])}
 
 
 pixel_tokenizer.vocab_size = 256 + 1
@@ -104,7 +105,8 @@ def get_cifar10_config():
     config.learning_rate = .0005
     config.warmup = (TRAIN_EXAMPLES // config.batch_size) * 1
     config.tied_weights = False
-    config.max_length = 1024 # 32 x 32 pics (which we "grayscaled"..)
+    # 32 x 32 pics (which we "grayscaled"..)
+    config.max_length = 1024
     
     steps_per_cycle = (TRAIN_EXAMPLES // config.batch_size) * NUM_EPOCHS
     config.lr_scheduler = lambda optimizer: CosineAnnealingLR(optimizer, steps_per_cycle)

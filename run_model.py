@@ -1,3 +1,4 @@
+import json
 from itertools import cycle
 import numpy as np
 import torch
@@ -36,7 +37,9 @@ def transformers_collator(sample_list):
 
 
 def accuracy_score(outp, target):
-    return sum(torch.argmax(outp, dim=-1) == target).item() / len(target)
+    assert len(outp.shape) == 2, "accuracy score must receive 2d output tensor"
+    assert len(target.shape) == 1, "accuracy score must receive 1d target tensor"
+    return (torch.argmax(outp, dim=-1) == target).sum().item() / len(target)
 
 
 # consts
@@ -67,7 +70,7 @@ def train(model, config, use_deepspeed):
     wd = config.weight_decay
     batch_size = config.batch_size 
     warmup_steps = config.warmup
-    gradient_accumulation_steps  = config.get('gradient_accumulation_steps', 1)
+    gradient_accumulation_steps = config.get('gradient_accumulation_steps', 1)
     avg_factor = 0.95
     
     dataset = task.dataset_fn(config, split='train')
@@ -87,6 +90,8 @@ def train(model, config, use_deepspeed):
     scheduler = scheduler_fn(optimizer)
     
     if use_deepspeed:
+        with open(deepspeed_json, "r") as fp:
+            deepspeed_config = json.load(fp)
         model_engine, optimizer, _, _ = deepspeed.initialize(model=model, model_parameters=model.parameters(),
                                                              optimizer=optimizer, lr_scheduler=scheduler,
                                                              config_params=deepspeed_config)
@@ -120,7 +125,7 @@ def train(model, config, use_deepspeed):
         cur_loss = loss.item()
         cur_acc = accuracy_score(outputs.logits, target)
         avg_loss = cur_loss if avg_loss is None else avg_factor * avg_loss + (1-avg_factor) * cur_loss  
-        avg_acc =  cur_acc if avg_acc is None else avg_factor * avg_acc + (1-avg_factor) * cur_acc
+        avg_acc = cur_acc if avg_acc is None else avg_factor * avg_acc + (1-avg_factor) * cur_acc
         pbar.set_postfix_str(f"loss: {avg_loss:.2f} accuracy: {avg_acc:.2f}")
         
         # evaluate
@@ -146,7 +151,6 @@ def train(model, config, use_deepspeed):
 
 # main
 if __name__ == "__main__":
-    
     parser = ArgumentParser()
     parser.add_argument("--task", default="listops", choices=TASKS.keys(),
                         help="choose an LRA dataset from available options")
