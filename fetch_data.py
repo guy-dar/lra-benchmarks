@@ -15,9 +15,13 @@ def download_url(url, save_path, chunk_size=1024):
     return save_path
 
 
-def extract_tar(archive, mode="r:gz"):
+def extract_tar(archive, subdir=None, mode="r:gz"):
     with tarfile.open(archive, mode) as tar:
-        tar.extractall()
+        if subdir is None:
+            tar.extractall()
+        else:
+            members = [tarinfo for tarinfo in tar.getmembers() if tarinfo.name.startswith(subdir)]
+            tar.extractall(members=members)
 
 
 if __name__ == "__main__":
@@ -40,6 +44,6 @@ if __name__ == "__main__":
         extract_tar(path)
     elif task == "listops":
         path = download_url(task["lra_release"]["url"], path_dir / "lra_release.tar.gz")
-        extract_tar(path)
+        extract_tar(path, subdir="lra_release/listops-1000")
     else:
         assert False, f"no support for dataset named `{task}`"
