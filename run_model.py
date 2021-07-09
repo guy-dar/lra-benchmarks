@@ -69,7 +69,7 @@ def train(model, config, use_deepspeed):
     lr = config.learning_rate
     wd = config.weight_decay
     batch_size = config.batch_size 
-    warmup_steps = config.warmup
+    warmup_steps = config.warmup_steps
     gradient_accumulation_steps = config.get('gradient_accumulation_steps', 1)
     avg_factor = 0.95
     

@@ -1,6 +1,6 @@
 import torch
 import ml_collections
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from train_utils import create_learning_rate_scheduler
 
 
 # helper fns
@@ -102,14 +102,13 @@ def get_cifar10_config():
     config.total_eval_samples = VALID_EXAMPLES
     config.total_train_samples = TRAIN_EXAMPLES * NUM_EPOCHS
     config.weight_decay = 0.
-    config.learning_rate = .0005
-    config.warmup = (TRAIN_EXAMPLES // config.batch_size) * 1
+    config.base_learning_rate = .0005
+    config.warmup_steps = (TRAIN_EXAMPLES // config.batch_size) * 1
     config.tied_weights = False
-    # 32 x 32 pics (which we "grayscaled"..)
+    # 32 x 32 pics (which we "gray-scaled"..)
     config.max_length = 1024
-    
-    steps_per_cycle = (TRAIN_EXAMPLES // config.batch_size) * NUM_EPOCHS
-    config.lr_scheduler = lambda optimizer: CosineAnnealingLR(optimizer, steps_per_cycle)
+    config.steps_per_cycle = (TRAIN_EXAMPLES // config.batch_size) * NUM_EPOCHS
+    config.lr_scheduler = create_learning_rate_scheduler("constant * linear_warmup * cosine_decay", config)
     
     # model params
     model_config = ml_collections.ConfigDict()
