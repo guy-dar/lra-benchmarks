@@ -2,6 +2,7 @@ import torch
 import ml_collections
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
+
 # helper fns
 def make_char_tokenizer(allowed_chars, lowercase_input=False):
     # make distinct
@@ -20,6 +21,7 @@ def make_char_tokenizer(allowed_chars, lowercase_input=False):
     _tokenizer.vocab_size = len(allowed_chars)+1
     return _tokenizer
 
+
 def pixel_tokenizer(x, max_length):
     # note: x is not batched
     x = x.flatten()
@@ -30,8 +32,10 @@ def pixel_tokenizer(x, max_length):
     return {'input_ids': torch.LongTensor([ids]), 
                 'attention_mask': torch.LongTensor([mask])}
 
+
 pixel_tokenizer.vocab_size = 256 + 1
 ascii_tokenizer = make_char_tokenizer(''.join(chr(i) for i in range(256)))
+
 
 # configs
 def get_listops_config():
@@ -59,6 +63,7 @@ def get_listops_config():
     
     return config, model_config
 
+
 def get_text_classification_config(num_labels=2):
     config = ml_collections.ConfigDict()
     config.batch_size = 4
@@ -82,6 +87,7 @@ def get_text_classification_config(num_labels=2):
     model_config.vocab_size = config.tokenizer.vocab_size
 
     return config, model_config
+
 
 def get_cifar10_config():
     NUM_EPOCHS = 200

@@ -1,12 +1,9 @@
 from itertools import cycle
 import numpy as np
-import pandas as pd
 import torch
-from torch import nn
 import torch.nn.functional as F
-import transformers
-from transformers import (AutoTokenizer, BertForSequenceClassification, BertConfig, 
-                         Trainer, TrainingArguments)
+from transformers import (AutoTokenizer, BertForSequenceClassification, BertConfig,
+                          Trainer, TrainingArguments)
 
 from tqdm import tqdm
 from torch.optim import Adam
@@ -17,15 +14,17 @@ from lra_config import (get_listops_config, get_cifar10_config, get_text_classif
 from lra_datasets import (ListOpsDataset, Cifar10Dataset, ImdbDataset)
 from argparse import ArgumentParser
 
-# helper fns
 
+# helper fns
 # TODO: bad
 def force_weight_sharing(layers_list):
     for i in range(len(layers_list)):
         layers_list[i] = layers_list[0]
 
+
 def dict_to_device(inputs, device):
     return {key: inputs[key].to(device) for key in inputs}
+
 
 def transformers_collator(sample_list):
     input_list, target_list = zip(*sample_list)
@@ -35,8 +34,10 @@ def transformers_collator(sample_list):
 #     inputs.update({'labels': target})
     return inputs, target
 
+
 def accuracy_score(outp, target):
     return sum(torch.argmax(outp, dim=-1) == target).item() / len(target)
+
 
 # consts
 OUTPUT_DIR = "output_dir/"
@@ -48,6 +49,7 @@ TASKS = {
          'imdb': ConfigDict(dict(dataset_fn=ImdbDataset, config_getter=get_text_classification_config)),
         }
 
+
 # main functions
 def get_model(config, model_config):
     model_config = BertConfig(**model_config)
@@ -57,6 +59,7 @@ def get_model(config, model_config):
         layer_base = model.bert.encoder.layer
         force_weight_sharing(layer_base)
     return model
+
 
 def train(model, config, use_deepspeed):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -140,17 +143,15 @@ def train(model, config, use_deepspeed):
                 eval_pbar.set_postfix_str(f"eval loss: {eval_running_loss/(j+1):.2f} eval accuracy: {eval_running_acc/(j+1):.2f}")
             model.train()
         
-    
-    
 
 # main
 if __name__ == "__main__":
     
     parser = ArgumentParser()
     parser.add_argument("--task", default="listops", choices=TASKS.keys(),
-                       help="choose an LRA dataset from available options")
+                        help="choose an LRA dataset from available options")
     parser.add_argument("--deepspeed", action="store_true",
-                       help="use deepspeed optimization for better performance")
+                        help="use deepspeed optimization for better performance")
     args = parser.parse_args()
     task_name = args.task
     if args.deepspeed:

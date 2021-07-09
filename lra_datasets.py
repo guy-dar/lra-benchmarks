@@ -6,6 +6,7 @@ import torch
 from glob import glob
 from itertools import cycle
 
+
 class ImdbDataset:
     def __init__(self, config, split='train'):       
         data_paths = {'train': "datasets/aclImdb/train",
@@ -31,6 +32,7 @@ class ImdbDataset:
     def __len__(self):
         return len(self.data)
 
+
 class ListOpsDataset:
     def __init__(self, config, split='train'):
         
@@ -49,6 +51,7 @@ class ListOpsDataset:
     
     def __len__(self):
         return len(self.data)
+
 
 class Cifar10Dataset:
     def __init__(self, config, split='train'):
