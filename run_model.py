@@ -8,7 +8,6 @@ from transformers import (AutoTokenizer, BertForSequenceClassification, BertConf
 
 from tqdm import tqdm
 from torch.optim import Adam
-from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 from ml_collections import ConfigDict
 from lra_config import (get_listops_config, get_cifar10_config, get_text_classification_config)
@@ -68,8 +67,7 @@ def train(model, config, use_deepspeed):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     lr = config.learning_rate
     wd = config.weight_decay
-    batch_size = config.batch_size 
-    warmup_steps = config.warmup_steps
+    batch_size = config.batch_size
     gradient_accumulation_steps = config.get('gradient_accumulation_steps', 1)
     avg_factor = 0.95
     
@@ -83,10 +81,7 @@ def train(model, config, use_deepspeed):
         max_eval_steps = int(np.ceil(config.total_eval_samples / batch_size))
     
     optimizer = Adam(model.parameters(), lr=lr, weight_decay=wd)
-    
-    def default_scheduler(optimizer): 
-        return LambdaLR(optimizer, lambda step: step/warmup_steps if step < warmup_steps else (step / warmup_steps)**(-.5))
-    scheduler_fn = config.get('lr_scheduler', default_scheduler)
+    scheduler_fn = config.lr_scheduler
     scheduler = scheduler_fn(optimizer)
     
     if use_deepspeed:
