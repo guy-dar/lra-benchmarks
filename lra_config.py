@@ -7,25 +7,48 @@ from train_utils import create_learning_rate_scheduler
 def make_char_tokenizer(allowed_chars, lowercase_input=False):
     # make distinct
     allowed_chars = list(set(allowed_chars))
-    
+
     def _tokenizer(x, max_length):
         # note: x is not batched
-        assert len(x.shape) == 1
         x = x[:max_length]
         if lowercase_input:
             x = x.lower()
         n = len(x)
-        mask = ([1] * n) + ([0] * (max_length-n))
-        ids = list(map(lambda c: allowed_chars.index(c)+1, x)) + ([0] * (max_length-n))
+        mask = ([1] * n) + ([0] * (max_length - n))
+        ids = list(map(lambda c: allowed_chars.index(c) + 1, x)) + ([0] * (max_length - n))
         return {'input_ids': torch.LongTensor([ids]), 'attention_mask': torch.LongTensor([mask])}
-    
-    _tokenizer.vocab_size = len(allowed_chars)+1
+
+    _tokenizer.vocab_size = len(allowed_chars) + 1
+    return _tokenizer
+
+
+def make_word_tokenizer(allowed_words, lowercase_input=False, allow_unk=True):
+    # make distinct
+    allowed_words = list(set(allowed_words))
+    PAD_TOKEN = 0
+    UNK_TOKEN = 1
+
+    def _tokenizer(x_str, max_length):
+        # note: x_str is not batched
+        if lowercase_input:
+            x_str = x_str.lower()
+
+        x = x_str.split()
+        x = x[:max_length]
+        n = len(x)
+        mask = ([1] * n) + ([0] * (max_length - n))
+        ids = list(map(lambda c: allowed_words.index(c) + 2 if c in allowed_words else UNK_TOKEN, x)) + \
+                  ([PAD_TOKEN] * (max_length - n))
+        if not allow_unk:
+            assert UNK_TOKEN not in ids, "unknown words are not allowed by this tokenizer"
+        return {'input_ids': torch.LongTensor([ids]), 'attention_mask': torch.LongTensor([mask])}
+
+    _tokenizer.vocab_size = len(allowed_words) + 2
     return _tokenizer
 
 
 def pixel_tokenizer(x, max_length):
     # note: x is not batched
-    assert len(x.shape) == 1
     x = x.flatten()
     x = x[:max_length]
     n = len(x)
@@ -46,12 +69,14 @@ def get_listops_config():
     config.eval_frequency = 50
     config.total_eval_samples = 640
     config.total_train_samples = 160000
-    config.learning_rate = 0.005
+    config.base_learning_rate = 0.005
     config.weight_decay = 1e-1
-    config.warmup = 1000
+    config.warmup_steps = 1000
     config.tied_weights = False
     config.max_length = 2000
-    config.tokenizer = make_char_tokenizer(set('0123456789 MIN MAX MEDIAN SUM_MOD [ ] ( )'))
+    config.tokenizer = make_word_tokenizer(list('0123456789') + ['[', ']', '(', ')', 'MIN', 'MAX', 'MEDIAN', 'SUM_MOD'])
+    #make_char_tokenizer(set('0123456789 MIN MAX MEDIAN SUM_MOD [ ] ( )'))
+    config.lr_scheduler = create_learning_rate_scheduler("constant * linear_warmup * rsqrt_decay", config)
 
     model_config = ml_collections.ConfigDict()    
     model_config.max_position_embeddings = config.max_length
@@ -73,7 +98,7 @@ def get_text_classification_config(num_labels=2):
     config.total_eval_samples = -1
     config.learning_rate = 0.05
     config.weight_decay = 1e-1
-    config.warmup = 8000
+    config.warmup_steps = 8000
     config.tokenizer = ascii_tokenizer
     config.tied_weights = False
     config.max_length = 1000
