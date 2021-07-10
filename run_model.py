@@ -140,7 +140,8 @@ def train(model, config, use_deepspeed):
                 loss = F.cross_entropy(outputs.logits, target)
                 eval_running_loss += loss.item()
                 eval_running_acc += accuracy_score(outputs.logits, target)
-                eval_pbar.set_postfix_str(f"eval loss: {eval_running_loss/(j+1):.2f} eval accuracy: {eval_running_acc/(j+1):.2f}")
+                eval_pbar.set_postfix_str(f"eval loss: {eval_running_loss/(j+1):.2f} "
+                                          f"eval accuracy: {eval_running_acc/(j+1):.2f}")
             model.train()
         
 
