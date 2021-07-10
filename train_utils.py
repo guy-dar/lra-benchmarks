@@ -16,16 +16,16 @@ def create_learning_rate_scheduler(factors, config):
       Args:
         factors: string, factors separated by '*' that defines the schedule.
         config:
-            config.base_learning_rate: float, the starting constant for the lr schedule.
+            config.learning_rate: float, the starting constant for the lr schedule.
             config.warmup_steps: int, how many steps to warm up for in the warmup schedule.
             config.decay_factor: float, the amount to decay the learning rate by.
             config.steps_per_decay: int, how often to decay the learning rate.
             config.steps_per_cycle: int, steps per cycle when using cosine decay.
       Returns:
-        a function of the signature optimizer->(step->step-dependent lr).
+        a function of signature optimizer->(step->lr).
   """
     factors = [n.strip() for n in factors.split('*')]
-    base_learning_rate: float = config.get('base_learning_rate', 0.5)
+    base_learning_rate: float = config.learning_rate
     warmup_steps: int = config.get('warmup_steps', 1000)
     decay_factor: float = config.get('decay_factor', 0.5)
     steps_per_decay: int = config.get('steps_per_decay', 20000)

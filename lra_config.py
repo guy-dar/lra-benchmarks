@@ -69,7 +69,7 @@ def get_listops_config():
     config.eval_frequency = 50
     config.total_eval_samples = 640
     config.total_train_samples = 160000
-    config.base_learning_rate = 0.005
+    config.learning_rate = 0.005
     config.weight_decay = 1e-1
     config.warmup_steps = 1000
     config.tied_weights = False
@@ -127,7 +127,7 @@ def get_cifar10_config():
     config.total_eval_samples = VALID_EXAMPLES
     config.total_train_samples = TRAIN_EXAMPLES * NUM_EPOCHS
     config.weight_decay = 0.
-    config.base_learning_rate = .0005
+    config.learning_rate = .0005
     config.warmup_steps = (TRAIN_EXAMPLES // config.batch_size) * 1
     config.tied_weights = False
     # 32 x 32 pics (which we "gray-scaled"..)
